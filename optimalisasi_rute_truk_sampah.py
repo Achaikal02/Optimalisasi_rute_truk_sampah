@@ -4,6 +4,7 @@ import folium
 import pandas as pd
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.model_selection import train_test_split
+from datetime import datetime
 
 # Fungsi untuk mengambil rute menggunakan OSRM API
 def get_route(origin, destination):
@@ -34,11 +35,15 @@ def create_data_model():
         [52.5450, 13.4650],  # Lokasi tempat sampah 7
     ]
     
-    data['demands'] = [0, 1, 1, 2, 4, 2, 4, 8]  # Depot punya demand 0
+    data['demands'] = [0, 1, 1, 2, 4, 2, 4, 8]  # Permintaan (jumlah sampah di lokasi)
     data['vehicle_capacities'] = [25]  # Kapasitas truk
     data['num_vehicles'] = 1
     data['depot'] = 0
 
+    # Menambahkan informasi jadwal (hari) untuk setiap lokasi
+    # 0: Setiap hari, 1: Setiap minggu, 2: Dua kali seminggu, dsb.
+    data['pickup_schedule'] = [0, 1, 2, 0, 1, 2, 0, 1]  # Jadwal pengambilan sampah per lokasi
+    
     return data
 
 # Fungsi untuk membuat matriks jarak menggunakan OSRM API
@@ -132,11 +137,43 @@ def train_volume_prediction_model():
 
     return model
 
-# Memecahkan masalah VRP
-def main():
-    # Membuat data model
-    data = create_data_model()
+# Fungsi untuk memfilter lokasi berdasarkan hari saat ini
+def filter_locations_by_day(data, current_day):
+    """
+    Memfilter lokasi yang harus diambil sampahnya berdasarkan jadwal dan hari saat ini.
+    
+    current_day: Hari saat ini (0: Senin, 1: Selasa, dst.)
+    """
+    filtered_locations = []
+    filtered_demands = []
+    filtered_schedule = []
+    
+    for i in range(len(data['locations'])):
+        # Jika jadwal adalah setiap hari (0) atau jadwal sesuai dengan current_day
+        if data['pickup_schedule'][i] == 0 or current_day % data['pickup_schedule'][i] == 0:
+            filtered_locations.append(data['locations'][i])
+            filtered_demands.append(data['demands'][i])
+            filtered_schedule.append(data['pickup_schedule'][i])
+    
+    # Mengupdate data model dengan lokasi dan permintaan yang difilter
+    data['locations'] = filtered_locations
+    data['demands'] = filtered_demands
+    data['pickup_schedule'] = filtered_schedule
 
+    return data
+
+# Fungsi untuk menghitung rute berdasarkan data yang ada
+def calculate_route(data):
+    """
+    Fungsi ini menghitung rute optimal berdasarkan data lokasi dan kapasitas kendaraan.
+
+    Parameter:
+    - data: dict berisi data lokasi, permintaan, kapasitas kendaraan, dll.
+
+    Return:
+    - route: urutan indeks lokasi yang dilalui
+    - total_distance: total jarak yang ditempuh
+    """
     # Membuat matriks jarak menggunakan OSRM
     distance_matrix = create_distance_matrix(data)
 
@@ -177,43 +214,54 @@ def main():
     # Memecahkan masalah
     solution = routing.SolveWithParameters(search_parameters)
 
-    # Visualisasi hasil
     if solution:
-        print('Objective: {}'.format(solution.ObjectiveValue()))
         total_distance = 0
-        total_load = 0
+        route = []
         for vehicle_id in range(data['num_vehicles']):
             index = routing.Start(vehicle_id)
-            plan_output = 'Route for vehicle {}:\n'.format(vehicle_id)
             route_distance = 0
-            route_load = 0
-            route = []
             while not routing.IsEnd(index):
                 node_index = manager.IndexToNode(index)
-                route_load += data['demands'][node_index]
-                plan_output += ' {0} Load({1}) -> '.format(node_index, route_load)
+                route.append(node_index)
                 previous_index = index
                 index = solution.Value(routing.NextVar(index))
                 route_distance += routing.GetArcCostForVehicle(previous_index, index, vehicle_id)
-                route.append(node_index)
             node_index = manager.IndexToNode(index)
             route.append(node_index)
-            plan_output += ' {0} Load({1})\n'.format(node_index, route_load)
-            plan_output += 'Distance of the route: {}m\n'.format(route_distance)
-            plan_output += 'Load of the route: {}\n'.format(route_load)
-            print(plan_output)
             total_distance += route_distance
-            total_load += route_load
 
-            # Visualisasi rute menggunakan Folium
-            visualize_route(data['locations'], route, total_distance)
+        return route, total_distance
+    else:
+        return None, 0  # Tidak ditemukan solusi
 
-        print('Total distance of all routes: {}m'.format(total_distance))
-        print('Total load of all routes: {}'.format(total_load))
+# Memecahkan masalah VRP dengan rencana pengambilan berkala
+def main():
+    # Tentukan hari saat ini (0: Senin, 1: Selasa, ..., 6: Minggu)
+    current_day = datetime.now().weekday()
+
+    # Membuat data model
+    data = create_data_model()
+
+    # Filter lokasi yang harus diambil berdasarkan jadwal dan hari saat ini
+    data = filter_locations_by_day(data, current_day)
+
+    # Pastikan ada lokasi yang harus diambil
+    if len(data['locations']) <= 1:
+        print(f"Tidak ada lokasi yang perlu diambil sampahnya pada hari ini (Day {current_day}).")
+        return
+
+    # Menghitung rute
+    route, total_distance = calculate_route(data)
+
+    if route:
+        print('Rute ditemukan.')
+        print(f"Total distance: {total_distance} m")
+
+        # Visualisasi rute menggunakan Folium
+        visualize_route(data['locations'], route, total_distance)
     else:
         print('No solution found!')
 
 if __name__ == '__main__':
     main()
-
 
