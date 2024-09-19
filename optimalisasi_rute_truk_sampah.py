@@ -5,6 +5,7 @@ import pandas as pd
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.model_selection import train_test_split
 from datetime import datetime
+import random
 
 # Fungsi untuk mengambil rute menggunakan OSRM API
 def get_route(origin, destination):
@@ -21,8 +22,35 @@ def get_route(origin, destination):
         print(f"Error: {response.status_code}, {response.text}")
         return float('inf')  # Mengembalikan nilai tak terhingga jika ada kesalahan
 
+# Fungsi untuk menghasilkan volume sampah berdasarkan hari
+def get_daily_demands(day):
+    """
+    Fungsi ini menghasilkan volume sampah berdasarkan hari dalam seminggu.
+    Hari Senin (day=0) lebih penuh, dan akhir pekan (day=5, 6) lebih ringan.
+    
+    day: Integer yang merepresentasikan hari dalam seminggu (0: Senin, 1: Selasa, ..., 6: Minggu)
+    
+    Return:
+    - List demands yang berisi volume sampah per lokasi.
+    """
+    if day == 0:  # Senin, volume sampah lebih tinggi
+        demands = [random.randint(5, 10) for _ in range(7)]  # Volume sampah lebih banyak
+    elif day == 5 or day == 6:  # Sabtu dan Minggu, volume sampah lebih rendah
+        demands = [random.randint(1, 3) for _ in range(7)]  # Volume sampah lebih sedikit
+    else:  # Hari biasa, volume sampah sedang
+        demands = [random.randint(2, 5) for _ in range(7)]
+    
+    demands.insert(0, 0)  # Tambahkan 0 untuk depot (lokasi awal truk)
+    return demands
+
 # Fungsi untuk membuat data model
-def create_data_model():
+def create_data_model(current_day):
+    """
+    Fungsi untuk membuat data model untuk routing. 
+    Sekarang menambahkan variasi volume sampah berdasarkan hari.
+    
+    current_day: Hari saat ini (0: Senin, 1: Selasa, dst.)
+    """
     data = {}
     data['locations'] = [
         [52.5200, 13.4050],  # Depot (lokasi awal truk) di Berlin
@@ -34,14 +62,15 @@ def create_data_model():
         [52.5400, 13.4550],  # Lokasi tempat sampah 6
         [52.5450, 13.4650],  # Lokasi tempat sampah 7
     ]
+
+    # Panggil get_daily_demands untuk mendapatkan demands berdasarkan hari
+    data['demands'] = get_daily_demands(current_day)
     
-    data['demands'] = [0, 1, 1, 2, 4, 2, 4, 8]  # Permintaan (jumlah sampah di lokasi)
     data['vehicle_capacities'] = [25]  # Kapasitas truk
     data['num_vehicles'] = 1
     data['depot'] = 0
 
     # Menambahkan informasi jadwal (hari) untuk setiap lokasi
-    # 0: Setiap hari, 1: Setiap minggu, 2: Dua kali seminggu, dsb.
     data['pickup_schedule'] = [0, 1, 2, 0, 1, 2, 0, 1]  # Jadwal pengambilan sampah per lokasi
     
     return data
@@ -239,8 +268,8 @@ def main():
     # Tentukan hari saat ini (0: Senin, 1: Selasa, ..., 6: Minggu)
     current_day = datetime.now().weekday()
 
-    # Membuat data model
-    data = create_data_model()
+    # Membuat data model berdasarkan hari saat ini
+    data = create_data_model(current_day)
 
     # Filter lokasi yang harus diambil berdasarkan jadwal dan hari saat ini
     data = filter_locations_by_day(data, current_day)

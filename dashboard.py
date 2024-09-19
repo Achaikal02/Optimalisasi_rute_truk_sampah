@@ -6,10 +6,8 @@ import pandas as pd
 import plotly.express as px
 import datetime
 
-# Mengimpor fungsi yang diperlukan dari optimalisasi_rute_truk_sampah.py
+# Mengimpor fungsi dari optimalisasi_rute_truk_sampah.py
 from optimalisasi_rute_truk_sampah import create_data_model, calculate_route, visualize_route, filter_locations_by_day, get_route_coordinates
-
-
 
 # Fungsi untuk menghasilkan peta Folium
 def generate_folium_map(locations, route, total_distance):
@@ -70,7 +68,7 @@ app.layout = html.Div([
                 {'label': 'Sabtu', 'value': 5},
                 {'label': 'Minggu', 'value': 6},
             ],
-            value=datetime.datetime.now().weekday(),
+            value=datetime.datetime.now().weekday(),  # Default ke hari ini
             clearable=False
         )
     ], style={'width': '35%', 'display': 'inline-block', 'vertical-align': 'top', 'padding': '20px'})
@@ -82,8 +80,8 @@ app.layout = html.Div([
     [Input('day-dropdown', 'value')]
 )
 def update_dashboard(selected_day):
-    # Membuat data model dan memfilter lokasi berdasarkan hari
-    data = create_data_model()
+    # Membuat data model dan memfilter lokasi berdasarkan hari yang dipilih
+    data = create_data_model(selected_day)
     filtered_data = filter_locations_by_day(data, selected_day)
 
     # Menghitung rute berdasarkan data yang sudah difilter
