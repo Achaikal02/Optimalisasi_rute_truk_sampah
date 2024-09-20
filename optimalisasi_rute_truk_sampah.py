@@ -53,14 +53,14 @@ def create_data_model(current_day):
     """
     data = {}
     data['locations'] = [
-        [52.5200, 13.4050],  # Depot (lokasi awal truk) di Berlin
-        [52.5250, 13.4050],  # Lokasi tempat sampah 1
-        [52.5250, 13.4150],  # Lokasi tempat sampah 2
-        [52.5300, 13.4250],  # Lokasi tempat sampah 3
-        [52.5300, 13.4350],  # Lokasi tempat sampah 4
-        [52.5350, 13.4450],  # Lokasi tempat sampah 5
-        [52.5400, 13.4550],  # Lokasi tempat sampah 6
-        [52.5450, 13.4650],  # Lokasi tempat sampah 7
+        [-6.2088, 106.8456],  # Depot (lokasi awal truk) di Jakarta
+        [-6.2154, 106.8424],  # Lokasi tempat sampah 1
+        [-6.2202, 106.8500],  # Lokasi tempat sampah 2
+        [-6.2255, 106.8433],  # Lokasi tempat sampah 3
+        [-6.2308, 106.8477],  # Lokasi tempat sampah 4
+        [-6.2356, 106.8508],  # Lokasi tempat sampah 5
+        [-6.2402, 106.8430],  # Lokasi tempat sampah 6
+        [-6.2451, 106.8462],  # Lokasi tempat sampah 7
     ]
 
     # Panggil get_daily_demands untuk mendapatkan demands berdasarkan hari
@@ -75,6 +75,7 @@ def create_data_model(current_day):
     
     return data
 
+
 # Fungsi untuk membuat matriks jarak menggunakan OSRM API
 def create_distance_matrix(data):
     distances = {}
@@ -84,11 +85,16 @@ def create_distance_matrix(data):
             if from_counter == to_counter:
                 distances[from_counter][to_counter] = 0
             else:
-                origin = f"{from_node[1]},{from_node[0]}"  # OSRM expects [lng,lat]
-                destination = f"{to_node[1]},{to_node[0]}"  # OSRM expects [lng,lat]
+                origin = f"{from_node[1]},{from_node[0]}"  # OSRM expects [lng, lat]
+                destination = f"{to_node[1]},{to_node[0]}"  # OSRM expects [lng, lat]
+                
+                # Handle cases where the OSRM API fails or returns invalid routes
                 distance = get_route(origin, destination)
-                distances[from_counter][to_counter] = distance
+                if distance == float('inf'):  # When route is invalid
+                    print(f"Warning: No valid route found from {origin} to {destination}")
+                distances[from_counter][to_counter] = distance if distance != float('inf') else 1e6  # Penalize with large distance if invalid
     return distances
+
 
 # Fungsi untuk mendapatkan koordinat rute dari OSRM API
 def get_route_coordinates(origin, destination):
@@ -123,8 +129,8 @@ def visualize_route(locations, route, total_distance):
     # Mendapatkan koordinat rute dari OSRM API
     route_coordinates = []
     for i in range(len(route) - 1):
-        origin = f"{locations[route[i]][1]},{locations[route[i]][0]}"  # OSRM expects [lng,lat]
-        destination = f"{locations[route[i + 1]][1]},{locations[route[i + 1]][0]}"  # OSRM expects [lng,lat]
+        origin = f"{locations[route[i]][1]},{locations[route[i]][0]}"  
+        destination = f"{locations[route[i + 1]][1]},{locations[route[i + 1]][0]}"  
         temp_coordinates = get_route_coordinates(origin, destination)
         if temp_coordinates:
             route_coordinates.extend(temp_coordinates)
@@ -231,8 +237,8 @@ def calculate_route(data):
     routing.AddDimensionWithVehicleCapacity(
         demand_callback_index,
         0,  # Tidak ada slack
-        data['vehicle_capacities'],  # Kapasitas kendaraan
-        True,  # Apakah kapasitas dimulai dari nol
+        data['vehicle_capacities'],  
+        True,  
         'Capacity'
     )
 
